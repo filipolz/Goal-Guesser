@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Goal Guesser</title>
+    <link rel="icon" href="/images/favicongoal.png">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 50%, #3d6fa1 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .game-container {
+            width: 100%;
+            max-width: 800px;
+            padding: 30px;
+            background-color: #ffffff;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+            border: 3px solid #2c5282;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+
+        /* --- VIDEO AREA --- */
+        .video-stage {
+            position: relative;
+            width: 100%;
+            margin-bottom: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            border: 2px solid #5dade2;
+            overflow: hidden;
+            background: #fff;
+        }
+
+        /* We keep the <video> for both modes, but hide/show it */
+        video {
+            width: 100%;
+            height: auto;
+            display: block;
+            border-radius: 0; /* stage already has rounding */
+        }
+
+        /* Canvas sits on top when filter is active */
+        #sketch-canvas {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            display: none; /* enabled during game */
+            background: #fff;
+        }
+
+        .guess-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 5px;
+            margin-bottom: 20px;
+        }
+
+        .grid-header {
+            font-weight: bold;
+            font-size: 0.8em;
+            text-align: center;
+            padding: 5px;
+            color: #2c5282;
+            background: linear-gradient(135deg, #5dade2 0%, #48a3d7 100%);
+            border-radius: 6px;
+            margin-bottom: 5px;
+        }
+
+        .grid-row {
+            display: contents;
+        }
+
+        .grid-cell {
+            height: 50px;
+            background-color: #f8f9fa;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 0.9em;
+            font-weight: bold;
+            overflow: hidden;
+            text-align: center;
+            padding: 2px;
+            transition: all 0.3s ease;
+        }
+
+        .cell-correct {
+            background: linear-gradient(135deg, #48c774 0%, #3fb96f 100%);
+            color: white;
+            border-color: #3fb96f;
+            box-shadow: 0 2px 8px rgba(72, 199, 116, 0.3);
+        }
+
+        .cell-incorrect {
+            background: linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%);
+            color: white;
+            border-color: #7f8c8d;
+        }
+
+        .cell-partial {
+            background: linear-gradient(135deg, #5dade2 0%, #48a3d7 100%);
+            color: white;
+            border-color: #48a3d7;
+            box-shadow: 0 2px 8px rgba(93, 173, 226, 0.3);
+        }
+
+        .input-area {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        #suggestions-list {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background-color: #fff;
+            border: 2px solid #5dade2;
+            border-top: none;
+            border-radius: 0 0 8px 8px;
+            z-index: 10;
+            max-height: 200px;
+            overflow-y: auto;
+            display: none;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .suggestion-item {
+            padding: 12px;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+            border-bottom: 1px solid #e8f4f8;
+        }
+
+        .suggestion-item:hover,
+        .suggestion-item.highlighted {
+            background: linear-gradient(135deg, #e8f4f8 0%, #d4ebf7 100%);
+            color: #2c5282;
+        }
+
+        #guess-input {
+            width: 300px;
+            padding: 12px;
+            border: 2px solid #5dade2;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+
+        #guess-input:focus {
+            outline: none;
+            border-color: #2c5282;
+            box-shadow: 0 0 0 3px rgba(93, 173, 226, 0.2);
+        }
+
+        .logo {
+            display: block;
+            max-width: 270px;
+            height: auto;
+            margin: 0 auto 30px auto;
+        }
+
+        .message-area {
+            text-align: center;
+            font-size: 1.3em;
+            font-weight: bold;
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #e8f4f8 0%, #d4ebf7 100%);
+            border: 2px solid #5dade2;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="game-container">
+        <img src="/images/goalGuesserLogo.png" alt="Goal Guesser" class="logo">
+
+        <!-- VIDEO DISPLAY: canvas overlay + video -->
+        <div class="video-stage">
+            <video id="goal-video" width="100%" controls autoplay loop muted playsinline>
+                <source src="" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+            <canvas id="sketch-canvas"></canvas>
+        </div>
+
+        <div class="input-area" id="input-area">
+            <div style="position: relative;">
+                <input type="text" id="guess-input" placeholder="Guess the player" autocomplete="off">
+                <div id="suggestions-list"></div>
+            </div>
+        </div>
+
+        <div class="guess-grid" id="guess-grid">
+            <div class="grid-header">Player</div>
+            <div class="grid-header">Club</div>
+            <div class="grid-header">League</div>
+            <div class="grid-header">Country</div>
+            <div class="grid-header">Position</div>
+            <div class="grid-header">Number</div>
+            <div class="grid-header">Age</div>
+
+            <div class="grid-row" id="row-1">
+                <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+            </div>
+            <div class="grid-row" id="row-2">
+                <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+            </div>
+            <div class="grid-row" id="row-3">
+                <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+            </div>
+            <div class="grid-row" id="row-4">
+                <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+            </div>
+            <div class="grid-row" id="row-5">
+                <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+            </div>
+            <div class="grid-row" id="row-6">
+                <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+            </div>
+        </div>
+
+        <div id="game-message" class="message-area"></div>
+    </div>
+
+    <!-- Player Data Scripts -->
+    <!-- LaLiga -->
+    <script src="playerDB/laliga/barcelona.js"></script>
+    <script src="playerDB/laliga/atletico.js"></script>
+    <script src="playerDB/laliga/realmadrid.js"></script>
+    <script src="playerDB/laliga/villarreal.js"></script>
+    <script src="playerDB/laliga/sevilla.js"></script>
+    <script src="playerDB/laliga/realsociedad.js"></script>
+    <script src="playerDB/laliga/athleticbilbao.js"></script>
+    <!-- Premier League -->
+    <script src="playerDB/prem/mancity.js"></script>
+    <script src="playerDB/prem/liverpool.js"></script>
+    <script src="playerDB/prem/chelsea.js"></script>
+    <script src="playerDB/prem/arsenal.js"></script>
+    <script src="playerDB/prem/tottenham.js"></script>
+    <script src="playerDB/prem/manunited.js"></script>
+    <script src="playerDB/prem/newcastle.js"></script>
+    <script src="playerDB/prem/astonvilla.js"></script>
+    <!-- Bundesliga -->
+    <script src="playerDB/bundesliga/bayern.js"></script>
+    <script src="playerDB/bundesliga/dortmund.js"></script>
+    <script src="playerDB/bundesliga/leverkusen.js"></script>
+    <script src="playerDB/bundesliga/leipzig.js"></script>
+    <script src="playerDB/bundesliga/stuttgart.js"></script>
+    <script src="playerDB/bundesliga/eintracht.js"></script>
+    <!-- Serie A -->
+    <script src="playerDB/seriea/atalanta.js"></script>
+    <script src="playerDB/seriea/fiorentina.js"></script>
+    <script src="playerDB/seriea/inter.js"></script>
+    <script src="playerDB/seriea/juventus.js"></script>
+    <script src="playerDB/seriea/lazio.js"></script>
+    <script src="playerDB/seriea/milan.js"></script>
+    <script src="playerDB/seriea/napoli.js"></script>
+    <script src="playerDB/seriea/roma.js"></script>
+    <!-- Ligue 1 -->
+    <script src="playerDB/ligue1/lens.js"></script>
+    <script src="playerDB/ligue1/lille.js"></script>
+    <script src="playerDB/ligue1/lyon.js"></script>
+    <script src="playerDB/ligue1/marsille.js"></script>
+    <script src="playerDB/ligue1/monaco.js"></script>
+    <script src="playerDB/ligue1/psg.js"></script>
+    <!-- Eredivisie -->
+    <script src="playerDB/eredivisie/ajax.js"></script>
+    <script src="playerDB/eredivisie/alkmaar.js"></script>
+    <script src="playerDB/eredivisie/feyenoord.js"></script>
+    <script src="playerDB/eredivisie/psv.js"></script>
+    <script src="playerDB/eredivisie/twente.js"></script>
+    <!-- Liga Portugal -->
+    <script src="playerDB/ligaportugal/porto.js"></script>
+    <script src="playerDB/ligaportugal/sporting.js"></script>
+    <script src="playerDB/ligaportugal/benfica.js"></script>
+    <script src="playerDB/ligaportugal/braga.js"></script>
+    <!-- Scottish Prem -->
+    <script src="playerDB/scottishprem/celtic.js"></script>
+    <script src="playerDB/scottishprem/rangers.js"></script>
+    <!-- Eliteserien (Norway) -->
+    <script src="playerDB/eliteserien/bodoglimt.js"></script>
+    <!-- Belgian Pro League -->
+    <script src="playerDB/belgianpro/antwerp.js"></script>
+    <script src="playerDB/belgianpro/clubbrugge.js"></script>
+    <script src="playerDB/belgianpro/genk.js"></script>
+    <script src="playerDB/belgianpro/unionsg.js"></script>
+    <!-- Superliga (Denmark) -->
+    <script src="playerDB/superliga/copenhagen.js"></script>
+    <!-- Süper Lig -->
+    <script src="playerDB/superlig/fernerbahce.js"></script>
+    <script src="playerDB/superlig/trabzonspor.js"></script>
+    <script src="playerDB/superlig/galatasaray.js"></script>
+    <script src="playerDB/superlig/besiktas.js"></script>
+    <!-- Super League Greece -->
+    <script src="playerDB/superleaguegreece/athens.js"></script>
+    <script src="playerDB/superleaguegreece/olympiacos.js"></script>
+    <script src="playerDB/superleaguegreece/panathinaikos.js"></script>
+    <script src="playerDB/superleaguegreece/paok.js"></script>
+    <!-- Czech First League -->
+    <script src="playerDB/czechleague/spartaprague.js"></script>
+    <script src="playerDB/czechleague/slaviaprague.js"></script>
+    <script src="playerDB/czechleague/viktoriaplezn.js"></script>
+    <!-- Swiss Super League -->
+    <script src="playerDB/swissleague/zurich.js"></script>
+    <script src="playerDB/swissleague/basel.js"></script>
+    <script src="playerDB/swissleague/youngboys.js"></script>
+    <!-- Ekstraklasa -->
+    <script src="playerDB/ekstraklasa/rakow.js"></script>
+    <script src="playerDB/ekstraklasa/jagielonia.js"></script>
+    <script src="playerDB/ekstraklasa/lech.js"></script>
+    <script src="playerDB/ekstraklasa/legia.js"></script>
+    <!-- Allsvenskan (Sweden) -->
+    <script src="playerDB/allsvenskan/malmo.js"></script>
+    <!-- Austrian Bundesliga -->
+    <script src="playerDB/austrianbundesliga/salzburg.js"></script>
+    <script src="playerDB/austrianbundesliga/sturmgraz.js"></script>
+
+    <script>
+        // --- 1. GAME DATA ---
+        const playersDB = {
+            ...barcelonaPlayers,
+            ...atleticoPlayers,
+            ...realmadridPlayers,
+            ...villarrealPlayers,
+            ...sevillaPlayers,
+            ...realsociedadPlayers,
+            ...athleticbilbaoPlayers,
+            ...mancityPlayers,
+            ...liverpoolPlayers,
+            ...chelseaPlayers,
+            ...arsenalPlayers,
+            ...tottenhamPlayers,
+            ...manunitedPlayers,
+            ...newcastlePlayers,
+            ...astonvillaPlayers,
+            ...bayernPlayers,
+            ...dortmundPlayers,
+            ...leverkusenPlayers,
+            ...leipzigPlayers,
+            ...stuttgartPlayers,
+            ...eintrachtPlayers,
+            ...atalantaPlayers,
+            ...fiorentinaPlayers,
+            ...interPlayers,
+            ...juventusPlayers,
+            ...lazioPlayers,
+            ...milanPlayers,
+            ...napoliPlayers,
+            ...romaPlayers,
+            ...lensPlayers,
+            ...lillePlayers,
+            ...lyonPlayers,
+            ...marsillePlayers,
+            ...monacoPlayers,
+            ...psgPlayers,
+            ...ajaxPlayers,
+            ...alkmaarPlayers,
+            ...feyenoordPlayers,
+            ...psvPlayers,
+            ...twentePlayers,
+            ...portoPlayers,
+            ...sportingPlayers,
+            ...benficaPlayers,
+            ...bragaPlayers,
+            ...celticPlayers,
+            ...rangersPlayers,
+            ...bodoglimtPlayers,
+            ...antwerpPlayers,
+            ...clubbruggePlayers,
+            ...genkPlayers,
+            ...unionsgPlayers,
+            ...copenhagenPlayers,
+            ...fernerbahcePlayers,
+            ...trabzonsporPlayers,
+            ...galatasarayPlayers,
+            ...besiktasPlayers,
+            ...athensPlayers,
+            ...olympiacosPlayers,
+            ...panathinaikosPlayers,
+            ...paokPlayers,
+            ...spartapraguePlayers,
+            ...slaviapraguePlayers,
+            ...viktoriapleznPlayers,
+            ...zurichPlayers,
+            ...baselPlayers,
+            ...youngboysPlayers,
+            ...rakowPlayers,
+            ...jagieloniaPlayers,
+            ...lechPlayers,
+            ...legiaPlayers,
+            ...malmoPlayers,
+            ...salzburgPlayers,
+            ...sturmgrazPlayers
+        };
+
+        const playerList = Object.values(playersDB);
+
+        const puzzle = {
+          "puzzleId": "goal-001",
+          "playerKey": "yamal",
+          "videoUrl": "/UCLGoalClips/goal-001.mp4"
+        };
+        
+        // --- 2. GAME STATE ---
+        let currentGuess = 1;
+        const MAX_GUESSES = 6;
+        const answerKey = puzzle.playerKey;
+        const answerData = playersDB[answerKey];
+        let gameOver = false;
+        let highlightedIndex = -1;
+        let currentMatches = [];
+        let guessedPlayers = [];
+
+        // --- 3. GET HTML ELEMENTS ---
+        const videoPlayer = document.getElementById("goal-video");
+        const guessInput = document.getElementById("guess-input");
+        const gameMessage = document.getElementById("game-message");
+        const suggestionsList = document.getElementById("suggestions-list");
+        const inputArea = document.getElementById("input-area");
+
+        const sketchCanvas = document.getElementById("sketch-canvas");
+        const sketchCtx = sketchCanvas.getContext("2d", { willReadFrequently: true });
+
+        const off = document.createElement("canvas");
+        const offCtx = off.getContext("2d", { willReadFrequently: true });
+
+        // Fixed filter settings (your chosen values)
+        const THRESHOLD = 50;
+        const EDGE_GAIN = 0.85;
+
+        // Filter/game mode:
+        // true  = show sketch canvas (during guessing)
+        // false = show normal video (after game ends)
+        let showSketch = true;
+
+        // --- 4. SOCCER SKETCH FILTER (minimal) ---
+        function ensureSketchSize() {
+            const w = videoPlayer.videoWidth | 0;
+            const h = videoPlayer.videoHeight | 0;
+            if (!w || !h) return false;
+
+            if (sketchCanvas.width !== w || sketchCanvas.height !== h) {
+                sketchCanvas.width = w;
+                sketchCanvas.height = h;
+                off.width = w;
+                off.height = h;
+            }
+            return true;
+        }
+
+        function sobelEdges(gray, w, h, gain) {
+            const out = new Uint8ClampedArray(w * h);
+
+            for (let y = 1; y < h - 1; y++) {
+                const yw = y * w;
+                for (let x = 1; x < w - 1; x++) {
+                    const i = yw + x;
+
+                    const a = gray[i - w - 1], b = gray[i - w],     c = gray[i - w + 1];
+                    const d = gray[i - 1],                           f = gray[i + 1];
+                    const g = gray[i + w - 1], h2 = gray[i + w],     k = gray[i + w + 1];
+
+                    const gx = (-a + c) + (-2 * d + 2 * f) + (-g + k);
+                    const gy = ( a + 2 * b + c) + (-g - 2 * h2 - k);
+
+                    let mag = (Math.abs(gx) + Math.abs(gy)) * gain;
+                    if (mag > 255) mag = 255;
+                    out[i] = mag;
+                }
+            }
+            return out;
+        }
+
+        function renderSketchFrame() {
+            if (!showSketch) return;                  // only render during game
+            if (videoPlayer.paused || videoPlayer.ended) return;
+            if (!ensureSketchSize()) return;
+
+            const w = off.width, h = off.height;
+
+            offCtx.drawImage(videoPlayer, 0, 0, w, h);
+
+            const img = offCtx.getImageData(0, 0, w, h);
+            const data = img.data;
+
+            const gray = new Uint8ClampedArray(w * h);
+            for (let i = 0, p = 0; i < data.length; i += 4, p++) {
+                const r = data[i], g = data[i + 1], b = data[i + 2];
+                gray[p] = (0.2126 * r + 0.7152 * g + 0.0722 * b) | 0;
+            }
+
+            const edges = sobelEdges(gray, w, h, EDGE_GAIN);
+
+            for (let p = 0, i = 0; p < edges.length; p++, i += 4) {
+                const v = edges[p] >= THRESHOLD ? 0 : 255; // black edges, white background
+                data[i] = v;
+                data[i + 1] = v;
+                data[i + 2] = v;
+                data[i + 3] = 255;
+            }
+
+            sketchCtx.putImageData(img, 0, 0);
+        }
+
+        function startSketchLoop() {
+            // Use requestVideoFrameCallback when available (best sync with video)
+            if ("requestVideoFrameCallback" in HTMLVideoElement.prototype) {
+                const step = () => {
+                    renderSketchFrame();
+                    videoPlayer.requestVideoFrameCallback(step);
+                };
+                videoPlayer.requestVideoFrameCallback(step);
+            } else {
+                const raf = () => {
+                    renderSketchFrame();
+                    requestAnimationFrame(raf);
+                };
+                requestAnimationFrame(raf);
+            }
+        }
+
+        function setVideoModeSketch() {
+            showSketch = true;
+            sketchCanvas.style.display = "block";
+            videoPlayer.style.visibility = "hidden"; // keep playing, but hide actual pixels
+        }
+
+        function setVideoModeNormal() {
+            showSketch = false;
+            sketchCanvas.style.display = "none";
+            videoPlayer.style.visibility = "visible";
+        }
+
+        // --- 5. GAME FUNCTIONS ---
+
+        function setupGame() {
+            // During the game we use the real clip, but show it through the sketch filter.
+            const videoSource = videoPlayer.querySelector("source");
+            videoSource.src = puzzle.videoUrl;
+            videoPlayer.load();
+
+            // Make sure it plays/loops muted like before
+            videoPlayer.loop = true;
+            videoPlayer.muted = true;
+
+            // Show filtered mode
+            setVideoModeSketch();
+
+            // Start processing once metadata is ready (dimensions known)
+            videoPlayer.addEventListener("loadedmetadata", () => {
+                // Try to play (autoplay may require user gesture in some browsers)
+                videoPlayer.play().catch(() => {});
+                startSketchLoop();
+            }, { once: true });
+        }
+
+        function handleSubmitGuess() {
+            if (gameOver) return;
+
+            const guessText = guessInput.value.trim();
+            const guessData = playerList.find(player =>
+                player.displayName.toLowerCase() === guessText.toLowerCase()
+            );
+
+            // Safety: if they typed something not in list, ignore
+            if (!guessData) {
+                gameMessage.textContent = "Pick a player from the suggestions.";
+                gameMessage.style.color = "red";
+                return;
+            }
+
+            guessedPlayers.push(guessData.displayName);
+
+            const hints = comparePlayers(guessData, answerData);
+            displayHints(guessData, hints, currentGuess);
+            guessInput.value = "";
+            suggestionsList.style.display = 'none';
+
+            if (guessData.displayName === answerData.displayName) {
+                gameMessage.textContent = "You got it!";
+                gameMessage.style.color = "green";
+                endGame(true);
+            } else {
+                currentGuess++;
+                if (currentGuess > MAX_GUESSES) {
+                    gameMessage.textContent = `You're out of guesses! The player was ${answerData.displayName}.`;
+                    gameMessage.style.color = "red";
+                    endGame(false);
+                }
+            }
+        }
+
+        function comparePlayers(guess, answer) {
+            let hints = {};
+            hints.club = (guess.club === answer.club) ? 'correct' : 'incorrect';
+            hints.league = (guess.league === answer.league) ? 'correct' : 'incorrect';
+            hints.country = (guess.country === answer.country) ? 'correct' : 'incorrect';
+            hints.position = (guess.position === answer.position) ? 'correct' : 'incorrect';
+
+            if (guess.number === answer.number) {
+                hints.number = 'correct';
+            } else if (guess.number > answer.number) {
+                hints.number = 'lower';
+            } else {
+                hints.number = 'higher';
+            }
+
+            if (guess.age === answer.age) {
+                hints.age = 'correct';
+            } else if (guess.age > answer.age) {
+                hints.age = 'lower';
+            } else {
+                hints.age = 'higher';
+            }
+
+            return hints;
+        }
+
+        function displayHints(guessData, hints, rowNum) {
+            const row = document.getElementById(`row-${rowNum}`);
+            const cells = row.querySelectorAll(".grid-cell");
+
+            cells[0].textContent = guessData.displayName;
+            cells[0].classList.add(guessData.displayName === answerData.displayName ? 'cell-correct' : 'cell-incorrect');
+
+            cells[1].textContent = guessData.club;
+            cells[1].classList.add(hints.club === 'correct' ? 'cell-correct' : 'cell-incorrect');
+
+            cells[2].textContent = guessData.league;
+            cells[2].classList.add(hints.league === 'correct' ? 'cell-correct' : 'cell-incorrect');
+
+            cells[3].textContent = guessData.country;
+            cells[3].classList.add(hints.country === 'correct' ? 'cell-correct' : 'cell-incorrect');
+
+            cells[4].textContent = guessData.position;
+            cells[4].classList.add(hints.position === 'correct' ? 'cell-correct' : 'cell-incorrect');
+
+            let numberText = guessData.number;
+            if (hints.number === 'lower') numberText += ' ↓';
+            if (hints.number === 'higher') numberText += ' ↑';
+            cells[5].textContent = numberText;
+            if (hints.number === 'correct') {
+                cells[5].classList.add('cell-correct');
+            } else {
+                cells[5].classList.add('cell-partial');
+            }
+
+            let ageText = guessData.age;
+            if (hints.age === 'lower') ageText += ' ↓';
+            if (hints.age === 'higher') ageText += ' ↑';
+            cells[6].textContent = ageText;
+            if (hints.age === 'correct') {
+                cells[6].classList.add('cell-correct');
+            } else {
+                cells[6].classList.add('cell-partial');
+            }
+        }
+
+        function endGame(didWin) {
+            gameOver = true;
+            guessInput.disabled = true;
+
+            // Switch to normal/original video display (same clip, unfiltered)
+            setVideoModeNormal();
+
+            // Keep your existing behavior: load + play the original clip
+            const videoSource = videoPlayer.querySelector("source");
+            videoSource.src = puzzle.videoUrl;
+            videoPlayer.loop = true; // keep loop behavior unless you want it to stop
+            videoPlayer.load();
+            videoPlayer.play().catch(() => {});
+        }
+
+        /* --- Autocomplete Functions --- */
+
+        function handleAutocomplete() {
+            const query = guessInput.value.trim().toLowerCase();
+            suggestionsList.innerHTML = "";
+            highlightedIndex = -1;
+
+            if (query.length === 0) {
+                suggestionsList.style.display = 'none';
+                currentMatches = [];
+                return;
+            }
+
+            const matches = playerList.filter(player =>
+                player.displayName.toLowerCase().includes(query) &&
+                !guessedPlayers.includes(player.displayName)
+            );
+
+            currentMatches = matches.slice(0, 5);
+
+            if (currentMatches.length === 0) {
+                suggestionsList.style.display = 'none';
+                return;
+            }
+
+            suggestionsList.style.display = 'block';
+            currentMatches.forEach((player, index) => {
+                const item = document.createElement('div');
+                item.classList.add('suggestion-item');
+                item.textContent = player.displayName;
+                item.dataset.index = index;
+
+                item.addEventListener('click', () => {
+                    guessInput.value = player.displayName;
+                    suggestionsList.innerHTML = "";
+                    suggestionsList.style.display = 'none';
+                    currentMatches = [];
+                    highlightedIndex = -1;
+                    handleSubmitGuess();
+                });
+
+                suggestionsList.appendChild(item);
+            });
+        }
+
+        function updateHighlight() {
+            const items = suggestionsList.querySelectorAll('.suggestion-item');
+            items.forEach((item, index) => {
+                if (index === highlightedIndex) {
+                    item.classList.add('highlighted');
+                    item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                } else {
+                    item.classList.remove('highlighted');
+                }
+            });
+        }
+
+        // --- START THE GAME & ADD EVENT LISTENERS ---
+        setupGame();
+
+        guessInput.addEventListener('input', handleAutocomplete);
+
+        guessInput.addEventListener('keydown', (event) => {
+            if (suggestionsList.style.display === 'none' || currentMatches.length === 0) {
+                return;
+            }
+
+            if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                highlightedIndex = (highlightedIndex + 1) % currentMatches.length;
+                updateHighlight();
+            } else if (event.key === 'ArrowUp') {
+                event.preventDefault();
+                highlightedIndex = highlightedIndex <= 0 ? currentMatches.length - 1 : highlightedIndex - 1;
+                updateHighlight();
+            } else if (event.key === 'Enter') {
+                event.preventDefault();
+                if (highlightedIndex >= 0 && highlightedIndex < currentMatches.length) {
+                    const selectedPlayer = currentMatches[highlightedIndex];
+                    guessInput.value = selectedPlayer.displayName;
+                    suggestionsList.innerHTML = "";
+                    suggestionsList.style.display = 'none';
+                    currentMatches = [];
+                    highlightedIndex = -1;
+                    handleSubmitGuess();
+                }
+            }
+        });
+
+        // IMPORTANT: allow Enter submit even if suggestions are closed (same as “type exact name then Enter”)
+        guessInput.addEventListener('keyup', (event) => {
+            if (event.key === 'Enter' && (suggestionsList.style.display === 'none' || currentMatches.length === 0)) {
+                handleSubmitGuess();
+            }
+        });
+
+        document.addEventListener('click', (event) => {
+            if (!inputArea.contains(event.target)) {
+                suggestionsList.style.display = 'none';
+                highlightedIndex = -1;
+                currentMatches = [];
+            }
+        });
+    </script>
+</body>
+</html>

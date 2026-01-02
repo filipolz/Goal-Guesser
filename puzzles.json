@@ -1,0 +1,48 @@
+        const puzzle = {
+          "puzzleId": "goal-001",
+          "playerKey": "yamal",
+          "videoUrl": "/UCLGoalClips/goal-001.mp4"
+        };
+
+        const puzzle = {
+          "puzzleId": "goal-002",
+          "playerKey": "alvarez",
+          "videoUrl": "/UCLGoalClips/goal-002.mp4"
+        };
+
+        const puzzle = {
+          "puzzleId": "goal-003",
+          "playerKey": "haaland",
+          "videoUrl": "/UCLGoalClips/goal-003.mp4"
+        };
+
+        const puzzle = {
+          "puzzleId": "goal-004",
+          "playerKey": "lautaro",
+          "videoUrl": "/UCLGoalClips/goal-004.mp4"
+        };
+
+        const puzzle = {
+          "puzzleId": "goal-005",
+          "playerKey": "mbappe",
+          "videoUrl": "/UCLGoalClips/goal-005.mp4"
+        };
+
+        const puzzle = {
+          "puzzleId": "goal-006",
+          "playerKey": "yamal",
+          "videoUrl": "/UCLGoalClips/goal-006.mp4"
+        };
+
+        const puzzle = {
+          "puzzleId": "goal-007",
+          "playerKey": "declanrice",
+          "videoUrl": "/UCLGoalClips/goal-007.mp4"
+        };
+
+        const puzzle = {
+          "puzzleId": "goal-008",
+          "playerKey": "thuram",
+          "videoUrl": "/UCLGoalClips/goal-008.mp4"
+        };
+
